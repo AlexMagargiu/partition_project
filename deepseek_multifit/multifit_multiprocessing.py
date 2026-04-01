@@ -1,5 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor
 import time
+import multiprocessing
 from multiprocessing import cpu_count
 
 def assign_elements(chunk):
@@ -19,14 +20,19 @@ def solve_parallel(arr):
     start_time = time.time()
     arr_sorted = sorted(arr, reverse=True)
     n = len(arr_sorted)
-    
+
     # Avoid excessive processes for small datasets
     optimal_processes = min(cpu_count(), max(1, n // 1000))
     chunk_size = max(1, n // optimal_processes)
     chunks = [arr_sorted[i*chunk_size : (i+1)*chunk_size] for i in range(optimal_processes)]
-    
-    with ProcessPoolExecutor(max_workers=optimal_processes) as executor:
-        results = list(executor.map(assign_elements, chunks))
+
+    # If already inside a daemon process, run sequentially to avoid nested multiprocessing error
+    current = multiprocessing.current_process()
+    if current.daemon or optimal_processes <= 1:
+        results = [assign_elements(chunk) for chunk in chunks]
+    else:
+        with ProcessPoolExecutor(max_workers=optimal_processes) as executor:
+            results = list(executor.map(assign_elements, chunks))
     
     # Combine results iteratively to minimize difference
     final_subset1, final_subset2 = [], []
